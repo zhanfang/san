@@ -62,6 +62,14 @@
 
 
     var san = {
+
+        /**
+         * san类型
+         *
+         * @type {string}
+         */        
+        type: 'for-swan',
+
         /**
          * san版本号
          *

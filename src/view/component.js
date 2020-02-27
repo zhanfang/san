@@ -126,7 +126,7 @@ function Component(options) { // eslint-disable-line
         this.scope = this.owner.data;
     }
 
-    this.id = guid++;
+    this.id = guid();
 
     // #[begin] reverse
     if (this.el) {
