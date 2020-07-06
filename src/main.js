@@ -48,14 +48,14 @@
     var parseTemplate = require('./parser/parse-template');
     var parseExpr = require('./parser/parse-expr');
     var ExprType = require('./parser/expr-type');
+    var unpackANode = require('./parser/unpack-anode');
     var LifeCycle = require('./view/life-cycle');
     var NodeType = require('./view/node-type');
     var Component = require('./view/component');
-    var compileComponent = require('./view/compile-component');
+    var parseComponentTemplate = require('./view/parse-component-template');
     var defineComponent = require('./view/define-component');
     var createComponentLoader = require('./view/create-component-loader');
     var emitDevtool = require('./util/emit-devtool');
-    var compileJSSource = require('./view/compile-js-source');
     var Data = require('./runtime/data');
     var evalExpr = require('./runtime/eval-expr');
     var DataTypes = require('./util/data-types');
@@ -86,34 +86,6 @@
         debug: true,
         // #[end]
 
-        // #[begin] ssr
-        /**
-         * 将组件类编译成 renderer 方法
-         *
-         * @param {Function} ComponentClass 组件类
-         * @return {function(Object):string}
-         */
-        compileToRenderer: function (ComponentClass) {
-            var renderer = ComponentClass.__ssrRenderer;
-
-            if (!renderer) {
-                var code = compileJSSource(ComponentClass);
-                renderer = (new Function('return ' + code))();
-                ComponentClass.__ssrRenderer = renderer;
-            }
-
-            return renderer;
-        },
-
-        /**
-         * 将组件类编译成 renderer 方法的源文件
-         *
-         * @param {Function} ComponentClass 组件类
-         * @return {string}
-         */
-        compileToSource: compileJSSource,
-        // #[end]
-
         /**
          * 组件基类
          *
@@ -141,11 +113,20 @@
         createComponentLoader: createComponentLoader,
 
         /**
-         * 编译组件类。预解析template和components
+         * 解析组件 template
          *
          * @param {Function} ComponentClass 组件类
+         * @return {ANode}
          */
-        compileComponent: compileComponent,
+        parseComponentTemplate: parseComponentTemplate,
+
+        /**
+         * 解压缩 ANode
+         *
+         * @param {Array} source ANode 压缩数据
+         * @return {Object}
+         */
+        unpackANode: unpackANode,
 
         /**
          * 解析 template

@@ -1,15 +1,16 @@
 {
   "name": "san-for-swan",
   "description": "A fast, portable, flexible JavaScript component framework",
-  "version": "3.7.9-fix.1",
+  "version": "3.9.1-fix.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/baidu/san.git"
   },
+  "homepage": "https://baidu.github.io/san/",
   "scripts": {
     "dev": "node ./tool/dev.js",
     "dev:unit": "npx karma start ./test/karma.conf.js start",
-    "pretest": "npm run build && node ./test/ssr/build-test.js && node ./test/perf/index.js",
+    "pretest": "npm run build && node ./test/reverse/build-test.js && node ./test/build-spec.js",
     "size": "npm run build && gzip -k dist/san.spa.modern.min.js && stat dist/san.spa.modern.min.js.gz && rm -f dist/*.gz",
     "test": "npm run test:unit",
     "test:unit": "npx karma start ./test/karma.conf.js --single-run",
@@ -20,7 +21,7 @@
     "build": "node ./tool/build.js"
   },
   "types": "types",
-  "main": "dist/san.ssr.js",
+  "main": "dist/san.dev.js",
   "browser": "dist/san.dev.js",
   "unpkg": "dist/san.min.js",
   "files": [
@@ -38,7 +39,7 @@
     "etpl": "^3.2.0",
     "handlebars": "^4.0.12",
     "http-server": "^0.11.1",
-    "jasmine-core": "^2.99.0",
+    "jasmine-core": "^2.99.1",
     "karma": "^4.0.1",
     "karma-chrome-launcher": "^2.0.0",
     "karma-coverage": "^1.1.2",
@@ -54,6 +55,7 @@
     "wdio-jasmine-framework": "^0.3.0",
     "wdio-sauce-service": "^0.4.14",
     "wdio-spec-reporter": "^0.1.0",
-    "webdriverio": "^5.7.0"
+    "webdriverio": "^5.7.0",
+    "san-anode-cases": "^3.9.0"
   }
 }

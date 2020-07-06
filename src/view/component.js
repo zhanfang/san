@@ -17,7 +17,7 @@ var ExprType = require('../parser/expr-type');
 var parseExpr = require('../parser/parse-expr');
 var parseTemplate = require('../parser/parse-template');
 var createAccessor = require('../parser/create-accessor');
-var postProp = require('../parser/post-prop');
+var unpackANode = require('../parser/unpack-anode');
 var removeEl = require('../browser/remove-el');
 var Data = require('../runtime/data');
 var evalExpr = require('../runtime/eval-expr');
@@ -25,17 +25,17 @@ var changeExprCompare = require('../runtime/change-expr-compare');
 var DataChangeType = require('../runtime/data-change-type');
 var insertBefore = require('../browser/insert-before');
 var un = require('../browser/un');
+var defineComponent = require('./define-component');
+var ComponentLoader = require('./component-loader');
 var createNode = require('./create-node');
-var compileComponent = require('./compile-component');
+var parseComponentTemplate = require('./parse-component-template');
 var preheatANode = require('./preheat-a-node');
 var LifeCycle = require('./life-cycle');
 var getANodeProp = require('./get-a-node-prop');
 var isDataChangeByElement = require('./is-data-change-by-element');
 var getEventListener = require('./get-event-listener');
 var reverseElementChildren = require('./reverse-element-children');
-var camelComponentBinds = require('./camel-component-binds');
 var NodeType = require('./node-type');
-var baseProps = require('./base-props');
 var nodeSBindInit = require('./node-s-bind-init');
 var nodeSBindUpdate = require('./node-s-bind-update');
 var elementOwnAttached = require('./element-own-attached');
@@ -57,7 +57,6 @@ var warn = require('../util/warn');
  * @param {Object} options 初始化参数
  */
 function Component(options) { // eslint-disable-line
-
     // #[begin] error
     for (var key in Component.prototype) {
         if (this[key] !== Component.prototype[key]) {
@@ -88,16 +87,43 @@ function Component(options) { // eslint-disable-line
         this.transition = options.transition;
     }
 
-    this.subTag = options.subTag;
+    var proto = clazz.prototype;
+
+    // pre define components class
+    /* istanbul ignore else  */
+    if (!proto.hasOwnProperty('_cmptReady')) {
+        proto.components = clazz.components || proto.components || {};
+        var components = proto.components;
+
+        for (var key in components) { // eslint-disable-line
+            var cmptClass = components[key];
+
+            if (typeof cmptClass === 'object' && !(cmptClass instanceof ComponentLoader)) {
+                components[key] = defineComponent(cmptClass);
+            }
+            else if (cmptClass === 'self') {
+                components[key] = clazz;
+            }
+        }
+
+        proto._cmptReady = 1;
+    }
 
     // compile
-    compileComponent(clazz);
+    if (!proto.hasOwnProperty('aNode')) {
+        var aPack = clazz.aPack || proto.hasOwnProperty('aPack') && proto.aPack;
+        if (aPack) {
+            proto.aNode = unpackANode(aPack);
+            clazz.aPack = proto.aPack = null;
+        }
+        else {
+            proto.aNode = parseComponentTemplate(clazz);
+        }
+    }
+    preheatANode(proto.aNode);
 
-    var protoANode = clazz.prototype.aNode;
-    preheatANode(protoANode);
 
-
-    this.tagName = protoANode.tagName;
+    this.tagName = proto.aNode.tagName;
     this.source = typeof options.source === 'string'
         ? parseTemplate(options.source).children[0]
         : options.source;
@@ -129,6 +155,7 @@ function Component(options) { // eslint-disable-line
     this.id = guid();
 
     // #[begin] reverse
+    // 组件反解，读取注入的组件数据
     if (this.el) {
         var firstCommentNode = this.el.firstChild;
         if (firstCommentNode && firstCommentNode.nodeType === 3) {
@@ -189,24 +216,36 @@ function Component(options) { // eslint-disable-line
         }
 
         this.tagName = this.tagName || this.source.tagName;
-        this.binds = camelComponentBinds(this.source.props);
+        this.binds = this.source.hotspot.binds;
 
         // init s-bind data
-        nodeSBindInit(this, this.source.directives.bind);
+        this._srcSbindData = nodeSBindInit(this.source.directives.bind, this.scope, this.owner);
     }
 
     this._toPhase('compiled');
 
     // init data
-    this.data = new Data(
-        extend(
-            typeof this.initData === 'function' && this.initData() || {},
-            options.data || this._sbindData
-        )
+    var initData = extend(
+        typeof this.initData === 'function' && this.initData() || {},
+        options.data || this._srcSbindData
     );
 
-    this.tagName = this.tagName || 'div';
+    if (this.binds && this.scope) {
+        for (var i = 0, l = this.binds.length; i < l; i++) {
+            var bindInfo = this.binds[i];
 
+            var value = evalExpr(bindInfo.expr, this.scope, this.owner);
+            if (typeof value !== 'undefined') {
+                // See: https://github.com/ecomfe/san/issues/191
+                initData[bindInfo.name] = value;
+            }
+        }
+    }
+
+    this.data = new Data(initData);
+
+
+    this.tagName = this.tagName || 'div';
     // #[begin] allua
     // ie8- 不支持innerHTML输出自定义标签
     /* istanbul ignore if */
@@ -215,20 +254,6 @@ function Component(options) { // eslint-disable-line
     }
     // #[end]
 
-    if (this.binds) {
-        for (var i = 0, l = this.binds.length; i < l; i++) {
-            var bindInfo = this.binds[i];
-            postProp(bindInfo);
-
-            if (this.scope) {
-                var value = evalExpr(bindInfo.expr, this.scope, this.owner);
-                if (typeof value !== 'undefined') {
-                    // See: https://github.com/ecomfe/san/issues/191
-                    this.data.set(bindInfo.name, value);
-                }
-            }
-        }
-    }
 
     // #[begin] error
     // 在初始化 + 数据绑定后，开始数据校验
@@ -237,7 +262,7 @@ function Component(options) { // eslint-disable-line
     if (dataTypes) {
         var dataTypeChecker = createDataTypesChecker(
             dataTypes,
-            this.subTag || this.name || clazz.name
+            this.name || clazz.name
         );
         this.data.setTypeChecker(dataTypeChecker);
         this.data.checkDataTypes();
@@ -251,41 +276,45 @@ function Component(options) { // eslint-disable-line
         }
     }
 
-    this.dataChanger = bind(this._dataChanger, this);
-    this.data.listen(this.dataChanger);
-
+    this._initDataChanger();
+    this._sbindData = nodeSBindInit(this.aNode.directives.bind, this.data, this);
     this._toPhase('inited');
 
     // #[begin] reverse
-    if (this.el) {
-        reverseElementChildren(this, this.data, this);
+    var reverseWalker = options.reverseWalker;
+    if (this.el || reverseWalker) {
+        var RootComponentType = this.getComponentType
+            ? this.getComponentType(this.aNode, this.data)
+            : this.components[this.aNode.tagName];
+
+        if (reverseWalker && (this.aNode.hotspot.hasRootNode || RootComponentType)) {
+            this._rootNode = createReverseNode(this.aNode, this, this.data, this, reverseWalker);
+            this._rootNode._getElAsRootNode && (this.el = this._rootNode._getElAsRootNode());
+        }
+        else if (this.el && RootComponentType) {
+            this._rootNode = new RootComponentType({
+                source: this.aNode,
+                owner: this,
+                scope: this.data,
+                parent: this,
+                el: this.el
+            });
+        }
+        else {
+            if (reverseWalker) {
+                var currentNode = reverseWalker.current;
+                if (currentNode && currentNode.nodeType === 1) {
+                    this.el = currentNode;
+                    reverseWalker.goNext();
+                }
+            }
+
+            reverseElementChildren(this, this.data, this);
+        }
+
         this._toPhase('created');
         this._attached();
         this._toPhase('attached');
-    }
-    else {
-        var walker = options.reverseWalker;
-        if (walker) {
-            var ifDirective = this.aNode.directives['if']; // eslint-disable-line dot-notation
-
-            if (!ifDirective || evalExpr(ifDirective.value, this.data, this)) {
-                var currentNode = walker.current;
-                if (currentNode && currentNode.nodeType === 1) {
-                    this.el = currentNode;
-                    walker.goNext();
-                }
-
-                reverseElementChildren(this, this.data, this);
-            }
-            else {
-                this.el = document.createComment(this.id);
-                insertBefore(this.el, walker.target, walker.current);
-            }
-
-            this._toPhase('created');
-            this._attached();
-            this._toPhase('attached');
-        }
     }
     // #[end]
 }
@@ -298,32 +327,36 @@ function Component(options) { // eslint-disable-line
  * @param {boolean} isFirstTime 是否初次对sourceSlots进行计算
  */
 Component.prototype._initSourceSlots = function (isFirstTime) {
-    var me = this;
     this.sourceSlots.named = {};
 
     // 组件运行时传入的结构，做slot解析
-    this.source && this.scope && each(this.source.children, function (child) {
-        var target;
+    if (this.source && this.scope) {
+        var sourceChildren = this.source.children;
 
-        var slotBind = !child.textExpr && getANodeProp(child, 'slot');
-        if (slotBind) {
-            isFirstTime && me.sourceSlotNameProps.push(slotBind);
+        for (var i = 0, l = sourceChildren.length; i < l; i++) {
+            var child = sourceChildren[i];
+            var target;
 
-            var slotName = evalExpr(slotBind.expr, me.scope, me.owner);
-            target = me.sourceSlots.named[slotName];
-            if (!target) {
-                target = me.sourceSlots.named[slotName] = [];
+            var slotBind = !child.textExpr && getANodeProp(child, 'slot');
+            if (slotBind) {
+                isFirstTime && this.sourceSlotNameProps.push(slotBind);
+
+                var slotName = evalExpr(slotBind.expr, this.scope, this.owner);
+                target = this.sourceSlots.named[slotName];
+                if (!target) {
+                    target = this.sourceSlots.named[slotName] = [];
+                }
+                target.push(child);
+            }
+            else if (isFirstTime) {
+                target = this.sourceSlots.noname;
+                if (!target) {
+                    target = this.sourceSlots.noname = [];
+                }
+                target.push(child);
             }
         }
-        else if (isFirstTime) {
-            target = me.sourceSlots.noname;
-            if (!target) {
-                target = me.sourceSlots.noname = [];
-            }
-        }
-
-        target && target.push(child);
-    });
+    }
 };
 
 /**
@@ -356,7 +389,8 @@ Component.prototype._toPhase = function (name) {
         if (typeof this[name] === 'function') {
             this[name]();
         }
-        this['_after' + name] = 1;
+
+        this._afterLife = this.lifeCycle;
 
         // 通知devtool
         // #[begin] devtool
@@ -578,23 +612,26 @@ Component.prototype._update = function (changes) {
     };
 
     if (changes) {
-        this.source && nodeSBindUpdate(
-            this,
-            this.source.directives.bind,
-            changes,
-            function (name, value) {
-                if (name in me.source.hotspot.props) {
-                    return;
-                }
-
-                me.data.set(name, value, {
-                    target: {
-                        node: me.owner
+        if (this.source) {
+            this._srcSbindData = nodeSBindUpdate(
+                this.source.directives.bind,
+                this._srcSbindData,
+                this.scope,
+                this.owner,
+                changes,
+                function (name, value) {
+                    if (name in me.source.hotspot.props) {
+                        return;
                     }
-                });
-            }
-        );
 
+                    me.data.set(name, value, {
+                        target: {
+                            node: me.owner
+                        }
+                    });
+                }
+            );
+        }
 
         each(changes, function (change) {
             var changeExpr = change.expr;
@@ -665,12 +702,28 @@ Component.prototype._update = function (changes) {
     if (dataChanges) {
         this._dataChanges = null;
 
-        var ifDirective = this.aNode.directives['if']; // eslint-disable-line dot-notation
-        var expectNodeType = (!ifDirective || evalExpr(ifDirective.value, this.data, this)) ? 1 : 8;
+        this._sbindData = nodeSBindUpdate(
+            this.aNode.directives.bind,
+            this._sbindData,
+            this.data,
+            this,
+            dataChanges,
+            function (name, value) {
+                if (me._rootNode || (name in me.aNode.hotspot.props)) {
+                    return;
+                }
 
-        if (this.el.nodeType === expectNodeType) {
-            if (expectNodeType === 1) {
-                var dynamicProps = this.aNode.hotspot.dynamicProps;
+                getPropHandler(me.tagName, name)(me.el, value, name, me);
+            }
+        );
+
+
+        if (this._rootNode) {
+            this._rootNode._update(dataChanges);
+            this._rootNode._getElAsRootNode && (this.el = this._rootNode._getElAsRootNode());
+        }
+        else {
+            var dynamicProps = this.aNode.hotspot.dynamicProps;
                 for (var i = 0; i < dynamicProps.length; i++) {
                     var prop = dynamicProps[i];
 
@@ -679,7 +732,7 @@ Component.prototype._update = function (changes) {
                         if (changeExprCompare(change.expr, prop.expr, this.data)
                             || prop.hintExpr && changeExprCompare(change.expr, prop.hintExpr, this.data)
                         ) {
-                            prop.handler(this.el, evalExpr(prop.expr, this.data, this), prop.name, this, prop);
+                            prop.handler(this.el, evalExpr(prop.expr, this.data, this), prop.name, this);
                             break;
                         }
                     }
@@ -688,16 +741,11 @@ Component.prototype._update = function (changes) {
                 for (var i = 0; i < this.children.length; i++) {
                     this.children[i]._update(dataChanges);
                 }
-
-
-                if (needReloadForSlot) {
-                    this._initSourceSlots();
-                    this._repaintChildren();
-                }
-            }
         }
-        else {
-            this._repaint(expectNodeType);
+
+        if (needReloadForSlot) {
+            this._initSourceSlots();
+            this._repaintChildren();
         }
 
         for (var i = 0; i < this.implicitChildren.length; i++) {
@@ -756,10 +804,21 @@ Component.prototype._updateBindxOwner = function (dataChanges) {
  * 在组件级别重绘有点粗暴，但是能保证视图结果正确性
  */
 Component.prototype._repaintChildren = function () {
-    if (this.el.nodeType === 1) {
+    // TODO: repaint once?
+
+    if (this._rootNode) {
+        var parentEl = this._rootNode.el.parentNode;
+        var beforeEl = this._rootNode.el.nextSibling;
+        this._rootNode.dispose(0, 1);
+        this.slotChildren = [];
+
+        this._rootNode = createNode(this.aNode, this, this.data, this);
+        this._rootNode.attach(parentEl, beforeEl);
+        this._rootNode._getElAsRootNode && (this.el = this._rootNode._getElAsRootNode());
+    }
+    else {
         elementDisposeChildren(this.children, 0, 1);
         this.children = [];
-
         this.slotChildren = [];
 
         for (var i = 0, l = this.aNode.children.length; i < l; i++) {
@@ -772,23 +831,29 @@ Component.prototype._repaintChildren = function () {
 
 
 /**
- * 组件内部监听数据变化的函数
+ * 初始化组件内部监听数据变化
  *
  * @private
  * @param {Object} change 数据变化信息
  */
-Component.prototype._dataChanger = function (change) {
-    if (this.lifeCycle.created && this._aftercreated) {
-        if (!this._dataChanges) {
-            nextTick(this._update, this);
-            this._dataChanges = [];
-        }
+Component.prototype._initDataChanger = function (change) {
+    var me = this;
 
-        this._dataChanges.push(change);
-    }
-    else if (this.lifeCycle.inited && this.owner) {
-        this._updateBindxOwner([change]);
-    }
+    this._dataChanger = function (change) {
+        if (me._afterLife.created) {
+            if (!me._dataChanges) {
+                nextTick(me._update, me);
+                me._dataChanges = [];
+            }
+
+            me._dataChanges.push(change);
+        }
+        else if (me.lifeCycle.inited && me.owner) {
+            me._updateBindxOwner([change]);
+        }
+    };
+
+    this.data.listen(this._dataChanger);
 };
 
 
@@ -808,6 +873,9 @@ Component.prototype.watch = function (dataName, listener) {
     }, this));
 };
 
+Component.prototype._getElAsRootNode = function () {
+    return this.el;
+};
 
 /**
  * 将组件attach到页面
@@ -817,104 +885,81 @@ Component.prototype.watch = function (dataName, listener) {
  */
 Component.prototype.attach = function (parentEl, beforeEl) {
     if (!this.lifeCycle.attached) {
-        this._attach(parentEl, beforeEl);
+        var hasRootNode = this.aNode.hotspot.hasRootNode
+            || (this.getComponentType
+                ? this.getComponentType(this.aNode, this.data)
+                : this.components[this.aNode.tagName]
+            );
+
+        if (hasRootNode) {
+            this._rootNode = this._rootNode || createNode(this.aNode, this, this.data, this);
+            this._rootNode.attach(parentEl, beforeEl);
+            this._rootNode._getElAsRootNode && (this.el = this._rootNode._getElAsRootNode());
+            this._toPhase('created');
+        }
+        else {
+            if (!this.el) {
+                var sourceNode = this.aNode.hotspot.sourceNode;
+                var props = this.aNode.props;
+
+                if (sourceNode) {
+                    this.el = sourceNode.cloneNode(false);
+                    props = this.aNode.hotspot.dynamicProps;
+                }
+                else {
+                    this.el = createEl(this.tagName);
+                }
+
+                if (this._sbindData) {
+                    for (var key in this._sbindData) {
+                        if (this._sbindData.hasOwnProperty(key)) {
+                            getPropHandler(this.tagName, key)(
+                                this.el,
+                                this._sbindData[key],
+                                key,
+                                this
+                            );
+                        }
+                    }
+                }
+
+                for (var i = 0, l = props.length; i < l; i++) {
+                    var prop = props[i];
+                    var value = evalExpr(prop.expr, this.data, this);
+
+                    if (value || !baseProps[prop.name]) {
+                        prop.handler(this.el, value, prop.name, this);
+                    }
+                }
+
+                this._toPhase('created');
+            }
+
+            insertBefore(this.el, parentEl, beforeEl);
+
+            if (!this._contentReady) {
+                for (var i = 0, l = this.aNode.children.length; i < l; i++) {
+                    var childANode = this.aNode.children[i];
+                    var child = childANode.Clazz
+                        ? new childANode.Clazz(childANode, this, this.data, this)
+                        : createNode(childANode, this, this.data, this);
+                    this.children.push(child);
+                    child.attach(this.el);
+                }
+
+                this._contentReady = 1;
+            }
+
+            this._attached();
+        }
+
+        this._toPhase('attached');
 
         // element 都是内部创建的，只有动态创建的 component 才会进入这个分支
         if (this.owner && !this.parent) {
             this.owner.implicitChildren.push(this);
         }
     }
-};
-
-Component.prototype._attach = function (parentEl, beforeEl) {
-    var ifDirective = this.aNode.directives['if']; // eslint-disable-line dot-notation
-
-    if (!ifDirective || evalExpr(ifDirective.value, this.data, this)) {
-        if (!this.el) {
-            var sourceNode = this.aNode.hotspot.sourceNode;
-            var props = this.aNode.props;
-
-            if (sourceNode) {
-                this.el = sourceNode.cloneNode(false);
-                props = this.aNode.hotspot.dynamicProps;
-            }
-            else {
-                this.el = createEl(this.tagName);
-            }
-
-            if (this._sbindData) {
-                for (var key in this._sbindData) {
-                    if (this._sbindData.hasOwnProperty(key)) {
-                        getPropHandler(this.tagName, key)(
-                            this.el,
-                            this._sbindData[key],
-                            key,
-                            this
-                        );
-                    }
-                }
-            }
-
-            for (var i = 0, l = props.length; i < l; i++) {
-                var prop = props[i];
-                var value = evalExpr(prop.expr, this.data, this);
-
-                if (value || !baseProps[prop.name]) {
-                    prop.handler(this.el, value, prop.name, this, prop);
-                }
-            }
-
-            this._toPhase('created');
-        }
-
-        insertBefore(this.el, parentEl, beforeEl);
-
-        if (!this._contentReady) {
-            for (var i = 0, l = this.aNode.children.length; i < l; i++) {
-                var childANode = this.aNode.children[i];
-                var child = childANode.Clazz
-                    ? new childANode.Clazz(childANode, this, this.data, this)
-                    : createNode(childANode, this, this.data, this);
-                this.children.push(child);
-                child.attach(this.el);
-            }
-
-            this._contentReady = 1;
-        }
-
-        this._attached();
-    }
-    else {
-        this.el = document.createComment(this.id);
-        this._toPhase('created');
-        insertBefore(this.el, parentEl, beforeEl);
-    }
-
-    this._toPhase('attached');
-};
-
-/**
- * 重新刷新组件视图
- */
-Component.prototype._repaint = function () {
-    elementDisposeChildren(this.children, 1, 1);
-    this.children = [];
-    this.slotChildren = [];
-
-    this._contentReady = 0;
-
-    var len = this._elFns.length;
-    while (len--) {
-        var fn = this._elFns[len];
-        un(this.el, fn[0], fn[1], fn[2]);
-    }
-    this._elFns = [];
-
-    var beforeEl = this.el;
-    this.el = null;
-    this._attach(beforeEl.parentNode, beforeEl);
-
-    removeEl(beforeEl);
 };
 
 Component.prototype.detach = elementOwnDetach;
@@ -942,33 +987,41 @@ Component.prototype._leave = function () {
             // 这里不用挨个调用 dispose 了，因为 children 释放链会调用的
             this.slotChildren = null;
 
-            var len = this.children.length;
-            while (len--) {
-                this.children[len].dispose(1, 1);
-            }
 
-            len = this._elFns.length;
-            while (len--) {
-                var fn = this._elFns[len];
-                un(this.el, fn[0], fn[1], fn[2]);
+            if (this._rootNode) {
+                // 如果没有parent，说明是一个root component，一定要从dom树中remove
+                this._rootNode.dispose(this.disposeNoDetach && this.parent);
             }
-            this._elFns = null;
+            else {
+                var len = this.children.length;
+                while (len--) {
+                    this.children[len].dispose(1, 1);
+                }
 
-            // #[begin] allua
-            /* istanbul ignore if */
-            if (this._inputTimer) {
-                clearInterval(this._inputTimer);
-                this._inputTimer = null;
-            }
-            // #[end]
+                len = this._elFns.length;
+                while (len--) {
+                    var fn = this._elFns[len];
+                    un(this.el, fn[0], fn[1], fn[2]);
+                }
+                this._elFns = null;
 
-            // 如果没有parent，说明是一个root component，一定要从dom树中remove
-            if (!this.disposeNoDetach || !this.parent) {
-                removeEl(this.el);
+                // #[begin] allua
+                /* istanbul ignore if */
+                if (this._inputTimer) {
+                    clearInterval(this._inputTimer);
+                    this._inputTimer = null;
+                }
+                // #[end]
+
+                // 如果没有parent，说明是一个root component，一定要从dom树中remove
+                if (!this.disposeNoDetach || !this.parent) {
+                    removeEl(this.el);
+                }
             }
 
             this._toPhase('detached');
 
+            this._rootNode = null;
             this.el = null;
             this.owner = null;
             this.scope = null;
@@ -982,7 +1035,19 @@ Component.prototype._leave = function () {
         }
     }
     else if (this.lifeCycle.attached) {
-        removeEl(this.el);
+        if (this._rootNode) {
+            if (this._rootNode.detach) {
+                this._rootNode.detach();
+            }
+            else {
+                this._rootNode.dispose();
+                this._rootNode = null;
+            }
+        }
+        else {
+            removeEl(this.el);
+        }
+
         this._toPhase('detached');
     }
 };

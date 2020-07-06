@@ -1,4 +1,3 @@
-
 declare namespace San {
     interface SanEvent<T, N> {
         target: SanComponent<T>;
@@ -8,7 +7,7 @@ declare namespace San {
 
     type SanEventListener<T, N> = (e: SanEvent<T, N>) => any;
     interface SanData<T> {
-        new(data?: {}, parent?: SanData<{}>);
+        new(data?: {}, parent?: SanData<{}>): SanData<T>;
         parent: SanData<{}>;
         raw: T;
 
@@ -20,7 +19,7 @@ declare namespace San {
         setTypeChecker(checker: () => void): void;
 
         fire(change: SanDataChangeInfo): void;
-        get(expr: string | ExprAccessorNode): any;
+        get<D = any>(expr?: string | ExprAccessorNode): D;
         set(expr: string | ExprAccessorNode, value: any, option?: SanDataChangeOption): void;
         merge(expr: string | ExprAccessorNode, source: {}, option?: SanDataChangeOption): void;
         apply(expr: string | ExprAccessorNode, changer: (oldval: {}) => {}, option?: SanDataChangeOption): void;
@@ -149,52 +148,69 @@ declare namespace San {
         BINARY = 8,
         UNARY = 9,
         TERTIARY = 10,
+        OBJECT = 11,
+        ARRAY = 12,
+        NULL = 13
     }
 
-    type ExprNode = ExprStringNode | ExprNumberNode | ExprBoolNode | ExprAccessorNode | ExprInterpNode | ExprCallNode | ExprTextNode | ExprBinaryNode | ExprUnaryNode | ExprTertiaryNode;
-    interface ExprStringNode {
-        type: ExprType.STRING;
+    interface ExprNodeTpl<T extends ExprType> {
+        type: T;        // 如果只有这一个属性，去掉泛型更可读
+        value?: any;    // 在 eval 会统一处理，事实上作用于 null, string, number
+        parenthesized?: boolean; // 在 read parenthesized expr 会统一设置
+    }
+    type ExprNode = ExprNodeTpl<any>;
+    interface ExprStringNode extends ExprNodeTpl<ExprType.STRING> {
         value: string;
     }
-    interface ExprNumberNode {
-        type: ExprType.NUMBER;
+    interface ExprNumberNode extends ExprNodeTpl<ExprType.NUMBER> {
         value: number;
     }
-    interface ExprBoolNode {
-        type: ExprType.BOOL;
+    interface ExprBoolNode extends ExprNodeTpl<ExprType.BOOL> {
         value: boolean;
     }
-    interface ExprAccessorNode {
-        type: ExprType.ACCESSOR;
+    interface ExprAccessorNode extends ExprNodeTpl<ExprType.ACCESSOR> {
         paths: ExprNode[];
     }
-    interface ExprInterpNode {
-        type: ExprType.INTERP;
+    interface ExprInterpNode extends ExprNodeTpl<ExprType.INTERP> {
         expr: ExprAccessorNode;
         filters: ExprCallNode[];
+        original: boolean;
+        raw: string;
     }
-    interface ExprCallNode {
-        type: ExprType.CALL;
+    interface ExprCallNode extends ExprNodeTpl<ExprType.CALL> {
         name: ExprAccessorNode;
         args: ExprNode[];
     }
-    interface ExprTextNode {
-        type: ExprType.TEXT;
+    interface ExprTextNode extends ExprNodeTpl<ExprType.TEXT> {
         segs: ExprNode[];
+        original?: number;
+        value?: string; // segs 由一个 STRING 构成时存在
     }
-    interface ExprBinaryNode {
-        type: ExprType.BINARY;
+    interface ExprBinaryNode extends ExprNodeTpl<ExprType.BINARY> {
         segs: [ExprNode, ExprNode];
         operator: number;
     }
-    interface ExprUnaryNode {
-        type: ExprType.UNARY;
+    interface ExprUnaryNode extends ExprNodeTpl<ExprType.UNARY> {
+        operator: number;
         expr: ExprAccessorNode;
     }
-    interface ExprTertiaryNode {
-        type: ExprType.TERTIARY;
+    interface ExprTertiaryNode extends ExprNodeTpl<ExprType.TERTIARY> {
         segs: ExprNode[];
     }
+    interface ExprObjectNode extends ExprNodeTpl<ExprType.OBJECT> {
+        items: [{
+            spread: boolean;
+            expr: ExprNode;
+            name: ExprNode;
+        }];
+    }
+    interface ExprArrayNode extends ExprNodeTpl<ExprType.ARRAY> {
+        items: [{
+            spread: boolean;
+            expr: ExprNode;
+        }];
+    }
+    interface ExprNullNode extends ExprNodeTpl<ExprType.NULL> {}
 
     interface SanIndexedList<T> {
         raw: T[];
@@ -217,15 +233,66 @@ declare namespace San {
         TPL = 7
     }
 
+    interface Directive<T extends ExprNode> {
+        item?: string;
+        index?: number;
+        trackBy?: ExprAccessorNode;
+        value: T;
+    }
+
+    interface ANodeProperty {
+        name: string;
+        expr: ExprNode;
+        noValue?: 1;
+        x?: number;
+    }
+
     interface ANode {
         isText?: boolean;
         text?: string;
-        textExpr?: ExprTextNode;
+        textExpr?: ExprTextNode | ExprStringNode;
         children?: ANode[];
-        props: ExprNode[];
+        props: ANodeProperty[];
         events: SanIndexedList<ExprNode>;
-        directives: { [k: string]: ExprNode };
+        directives: { [k: string]: Directive<any> };
         tagName: string;
+        vars?: [{
+            name: string;
+            expr: ExprNode
+        }];
+    }
+
+    interface ATextNode extends ANode {
+        textExpr: ExprTextNode | ExprStringNode;
+    }
+
+    interface ATemplateNode extends ANode {
+        tagName: 'template';
+        children: ANode[];
+    }
+
+    interface AFragmentNode extends ANode {
+        tagName: 'fragment';
+        children: ANode[];
+    }
+
+    interface AForNode extends ANode {
+        directives: {
+            for: Directive<any>;
+        };
+    }
+
+    interface AIfNode extends ANode {
+        ifRinsed: ANode;
+        elses?: ANode[];
+        directives: {
+            if: Directive<any>;
+        };
+    }
+
+    interface ASlotNode extends ANode {
+        children: ANode[];
+        tagName: 'slot';
     }
 
     interface ParseTemplateOption {
@@ -240,12 +307,11 @@ declare namespace San {
     function defineComponent<T, D>(config: SanComponentConfig<T, D> & D): ComponentConstructor<T, D>;
     function createComponentLoader<T, D>(options: SanComponentLoaderOption<T, D> | SanComponentLoaderOption<T, D>['load']): SanComponentLoader<T, D>;
     function compileComponent<T extends SanComponent<{}>>(component: T): void;
-    function compileToRenderer<T extends SanComponent<{}>>(component: T): SanRenderer<T>;
-    function compileToSource<T extends SanComponent<{}>>(component: T): string;
 
     function parseExpr(template: string): ExprNode;
     function evalExpr<T, D extends SanComponent<{}>>(expr: ExprNode, data: SanData<T>, owner?: D): any;
     function parseTemplate(template: string, options?: ParseTemplateOption): ANode;
+    function parseComponentTemplate(componentClass: ComponentConstructor<{}, {}>): ANode;
     function inherits(childClazz: (...args: any[]) => void, parentClazz: ComponentConstructor<{}, {}>): void;
     function nextTick(doNextTick: () => any): void;
     const DataTypes: {
@@ -352,8 +418,6 @@ interface SanStaticGlobal {
     defineComponent<T, D>(config: San.SanComponentConfig<T, D> & D): San.ComponentConstructor<T, D>;
     createComponentLoader<T, D>(options: San.SanComponentLoaderOption<T, D> | San.SanComponentLoaderOption<T, D>['load']): San.SanComponentLoader<T, D>;
     compileComponent<T extends San.SanComponent<{}>>(component: T): void;
-    compileToRenderer<T extends San.SanComponent<{}>>(component: T): San.SanRenderer<T>;
-    compileToSource<T extends San.SanComponent<{}>>(component: T): string;
 
     parseExpr(template: string): San.ExprNode;
     evalExpr<T, D extends San.SanComponent<{}>>(expr: San.ExprNode, data: San.SanData<T>, owner?: D): any;

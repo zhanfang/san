@@ -77,9 +77,11 @@ function SlotNode(aNode, parent, scope, owner, reverseWalker) {
         vars: aNode.vars
     };
 
+    this._sbindData = nodeSBindInit(aNode.directives.bind, this.scope, this.owner);
+
     // calc scoped slot vars
     var initData;
-    if (nodeSBindInit(this, aNode.directives.bind)) {
+    if (this._sbindData) {
         initData = extend({}, this._sbindData);
     }
 
@@ -106,23 +108,43 @@ function SlotNode(aNode, parent, scope, owner, reverseWalker) {
 
     // #[begin] reverse
     if (reverseWalker) {
+        var hasFlagComment;
 
-        this.sel = document.createComment(this.id);
-        insertBefore(this.sel, reverseWalker.target, reverseWalker.current);
+        // start flag
+        if (reverseWalker.current && reverseWalker.current.nodeType === 8) {
+            this.sel = reverseWalker.current;
+            hasFlagComment = 1;
+            reverseWalker.goNext();
+        }
+        else {
+            this.sel = document.createComment(this.id);
+            reverseWalker.current
+                ? reverseWalker.target.insertBefore(this.sel, reverseWalker.current)
+                : reverseWalker.target.appendChild(this.sel);
+        }
 
-        var me = this;
-        each(this.aNode.children, function (aNodeChild) {
-            me.children.push(createReverseNode(
-                aNodeChild,
-                me,
-                me.childScope || me.scope,
-                me.childOwner || me.owner,
+        var aNodeChildren = this.aNode.children;
+        for (var i = 0, l = aNodeChildren.length; i < l; i++) {
+            this.children.push(createReverseNode(
+                aNodeChildren[i],
+                this,
+                this.childScope || this.scope,
+                this.childOwner || this.owner,
                 reverseWalker
             ));
-        });
+        }
 
-        this.el = document.createComment(this.id);
-        insertBefore(this.el, reverseWalker.target, reverseWalker.current);
+        // end flag
+        if (hasFlagComment) {
+            this.el = reverseWalker.current;
+            reverseWalker.goNext();
+        }
+        else {
+            this.el = document.createComment(this.id);
+            reverseWalker.current
+                ? reverseWalker.target.insertBefore(this.el, reverseWalker.current)
+                : reverseWalker.target.appendChild(this.el);
+        }
 
         this.lifeCycle = LifeCycle.attached;
     }
@@ -195,9 +217,11 @@ SlotNode.prototype._update = function (changes, isFromOuter) {
 
             var scopedChanges = [];
 
-            nodeSBindUpdate(
-                this,
+            this._sbindData = nodeSBindUpdate(
                 this.aNode.directives.bind,
+                this._sbindData,
+                this.scope,
+                this.owner,
                 changes,
                 function (name, value) {
                     if (varKeys[name]) {

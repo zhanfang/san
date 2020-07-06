@@ -11,7 +11,7 @@ Reloaded before every execution run.
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 </head>
 <body>
-  <!-- for ssr test -->
+  <!-- for reverse test -->
   <div id="array-literal"><div><!--s-data:{"ext2":[],"ext":[]}--><ul><li>1</li><li>true</li><li>erik</li></ul></div></div>
 
 <div id="bool-attr-bindings-false"><div><!--s-data:{}--><button>button</button></div></div>
@@ -34,9 +34,17 @@ Reloaded before every execution run.
 
 <div id="class-merge"><div><!--s-data:{"clazz":"outer"}--><b class="outer"></b></div></div>
 
+<div id="cmpt-cmpt-root"><div><!--s-data:{"link":"https://baidu.github.io/san/","framework":"San","linkText":"HomePage"}--><h3>see <a href="https://baidu.github.io/san/">HomePage</a> to start <b>San</b> framework</h3></div></div>
+
+<div id="cmpt-cmpt-root-direct"><span title="erik"><!--s-data:{"name":"erik"}-->erik</span></div>
+
+<div id="cmpt-cmpt-root-nlevel"><span title="erik"><!--s-data:{"name":"erik"}-->erik</span></div>
+
 <div id="cmpt-event"><div><!--s-data:{"title":"1","text":"one"}--><a><span title="1">one</span></a></div></div>
 
 <div id="cmpt-fill-slot"><div><!--s-data:{"searchValue":"er"}--><b title="er">er</b><a><div><input type="text" value="er"><button>search</button></div></a></div></div>
+
+<div id="cmpt-fragment"><div><!--s-data:{"link":"https://baidu.github.io/san/","name":"San","linkText":"HomePage"}-->see <a href="https://baidu.github.io/san/">HomePage</a> to start <b>San</b> framework</div></div>
 
 <div id="cmpt-if-init-false"><div><!--s-data:{"cond":false,"jokeName":"airike","name":"errorrik","school":"none","company":"bidu"}--><h5></h5><p><a>none</a><u>bidu</u></p></div></div>
 
@@ -55,6 +63,10 @@ Reloaded before every execution run.
 <div id="computed-data"><div><!--s-data:{"title":"1","realTitle":"real1"}--><b title="real1">real1</b></div></div>
 
 <div id="computed-dep"><div><!--s-data:{"num":10,"less":9,"more":11,"normal":10}--><a>9</a><u>10</u><b>11</b></div></div>
+
+<div id="content-attr"><div zero="0" falsy="false" truth="true" estr=""><!--s-data:{"nul":null,"falsy":false,"truth":true,"estr":""}-->test</div></div>
+
+<div id="content-attr-sbind"><div falsy="false" truth="true" estr="" zero="0"><!--s-data:{"sb":{"nul":null,"falsy":false,"truth":true,"estr":"","zero":0}}-->test</div></div>
 
 <div id="custom-tag-name"><div><!--s-data:{"text":"hello san"}--><x-p>hello san</x-p></div></div>
 
@@ -91,6 +103,8 @@ Reloaded before every execution run.
 <div id="for-set-many-data"><ul><!--s-data:{"persons":[{"name":"errorrik","email":"errorrik@gmail.com"},{"name":"otakustay","email":"otakustay@gmail.com"}]}--><li>name - email</li><li title="errorrik">errorrik - errorrik@gmail.com</li><li title="otakustay">otakustay - otakustay@gmail.com</li><li>name - email</li></ul></div>
 
 <div id="for-update-empty-data"><ul><!--s-data:{"persons":[]}--><li>name - email</li><li>name - email</li></ul></div>
+
+<div id="fragment-sibling"><div><!--s-data:{"name":"San","type":"Framework","start":"learn","docURL":"https://baidu.github.io/san/"}--><!--s-frag-->Hello <b>San</b> Framework and <!--/s-frag--><!--s-frag-->learn from <a href="https://baidu.github.io/san/">doc</a>.<!--/s-frag--></div></div>
 
 <div id="given-content-owner-data"><div><!--s-data:{"man":{"name":"errorrik","sex":1,"email":"errorrik@gmail.com"},"desc":"tip"}--><div><h3>errorrik</h3><b>male</b><u>errorrik@gmail.com</u><a>tip</a></div></div></div>
 

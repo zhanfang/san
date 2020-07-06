@@ -33,7 +33,7 @@ describe('parseTemplate', function () {
 
     var AUTO_CLOSE_TAGS = [
         'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-        'keygen', 'param', 'source', 'track', 'wbr'
+        'link', 'meta', 'param', 'source', 'track', 'wbr'
     ];
 
     var AUTO_CLOSE_TAGS_MAP = {};
@@ -185,29 +185,6 @@ describe('parseTemplate', function () {
             san.parseTemplate('<table> <tr></tr> </table>');
         }).not.toThrow();
 
-    });
-
-    it('should throw error if attributes is not wrapped with "" or \'\'', function () {
-
-        expect(function () {
-            san.parseTemplate('<div> <h1 title=aaa></h1> </div>');
-        }).toThrowError('[SAN ERROR] ROOT>div>h1 attribute `title` is not wrapped with ""');
-
-        expect(function () {
-            san.parseTemplate('<div><h1 title="aaa></h1> </div>');
-        }).toThrowError('[SAN ERROR] ROOT>div>h1 attribute `title` is not wrapped with ""');
-
-        expect(function () {
-            san.parseTemplate('<div> <h1 title=aaa"></h1> </div>');
-        }).toThrowError('[SAN ERROR] ROOT>div>h1 attribute `title` is not wrapped with ""');
-
-        expect(function () {
-            san.parseTemplate('<div> <h1 title=\'aaa></h1> </div>');
-        }).toThrowError('[SAN ERROR] ROOT>div>h1 attribute `title` is not wrapped with ""');
-
-        expect(function () {
-            san.parseTemplate('<div> <h1 title=aaa\'></h1> </div>');
-        }).toThrowError('[SAN ERROR] ROOT>div>h1 attribute `title` is not wrapped with ""');
     });
 
     it('should return normal ANode by not string', function () {

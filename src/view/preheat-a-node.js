@@ -10,6 +10,8 @@
 var ExprType = require('../parser/expr-type');
 var each = require('../util/each');
 var extend = require('../util/extend');
+var kebab2camel = require('../util/kebab2camel');
+var hotTags = require('../browser/hot-tags');
 var createEl = require('../browser/create-el');
 var getPropHandler = require('./get-prop-handler');
 var getANodeProp = require('./get-a-node-prop');
@@ -19,6 +21,7 @@ var SlotNode = require('./slot-node');
 var ForNode = require('./for-node');
 var IfNode = require('./if-node');
 var TemplateNode = require('./template-node');
+var Element = require('./element');
 
 /**
  * ANode预热，分析的数据引用等信息
@@ -71,6 +74,7 @@ function preheatANode(aNode) {
                     dynamicProps: [],
                     xProps: [],
                     props: {},
+                    binds: [],
                     sourceNode: sourceNode
                 };
 
@@ -81,6 +85,14 @@ function preheatANode(aNode) {
                 });
 
                 each(aNode.props, function (prop) {
+                    aNode.hotspot.binds.push({
+                        name: kebab2camel(prop.name),
+                        expr: prop.noValue != null 
+                            ? {type: ExprType.BOOL, value: true}
+                            : prop.expr,
+                        x: prop.x,
+                        noValue: prop.noValue
+                    });
                     recordHotspotData(prop.expr);
                 });
 
@@ -102,7 +114,7 @@ function preheatANode(aNode) {
                             ) {
                                 aNode.hotspot.getForKey = new Function(
                                     directive.item,
-                                    'return ' + trackBy.raw
+                                    'return ' + directive.trackByRaw
                                 );
                             }
                         }
@@ -124,12 +136,7 @@ function preheatANode(aNode) {
                     aNode.hotspot.props[prop.name] = index;
                     prop.handler = getPropHandler(aNode.tagName, prop.name);
 
-                    if (prop.name === 'id') {
-                        prop.id = true;
-                        aNode.hotspot.idProp = prop;
-                        aNode.hotspot.dynamicProps.push(prop);
-                    }
-                    else if (prop.expr.value != null) {
+                    if (prop.expr.value != null) {
                         if (sourceNode) {
                             prop.handler(sourceNode, prop.expr.value, prop.name, aNode);
                         }
@@ -168,6 +175,7 @@ function preheatANode(aNode) {
                         hotspot: aNode.hotspot,
                         directives: extend({}, aNode.directives)
                     };
+                    aNode.hotspot.hasRootNode = true;
                     aNode.Clazz = IfNode;
                     aNode = aNode.ifRinsed;
                     aNode.directives['if'] = null; // eslint-disable-line dot-notation
@@ -183,18 +191,26 @@ function preheatANode(aNode) {
                         hotspot: aNode.hotspot,
                         directives: extend({}, aNode.directives)
                     };
+                    aNode.hotspot.hasRootNode = true;
                     aNode.Clazz = ForNode;
                     aNode.forRinsed.directives['for'] = null; // eslint-disable-line dot-notation
                     aNode = aNode.forRinsed;
                 }
 
-                switch (aNode.tagName) {
-                    case 'slot':
-                        aNode.Clazz = SlotNode;
-                        break;
+                if (hotTags[aNode.tagName]) {
+                    aNode.Clazz = Element;
+                }
+                else {
+                    switch (aNode.tagName) {
+                        case 'slot':
+                            aNode.Clazz = SlotNode;
+                            break;
 
-                    case 'template':
-                        aNode.Clazz = TemplateNode;
+                        case 'template':
+                        case 'fragment':
+                            aNode.hotspot.hasRootNode = true;
+                            aNode.Clazz = TemplateNode;
+                    }
                 }
                 // === analyse hotspot props: end
             }

@@ -170,4 +170,9 @@ IfNode.prototype._update = function (changes) {
     }
 };
 
+IfNode.prototype._getElAsRootNode = function () {
+    var child = this.children[0];
+    return child && child.el || this.el;
+};
+
 exports = module.exports = IfNode;

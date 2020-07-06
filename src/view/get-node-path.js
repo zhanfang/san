@@ -32,7 +32,7 @@ function getNodePath(node) {
                 break;
 
             case NodeType.FOR:
-                nodePaths.unshift('for[' + nodeParent.anode.directives['for'].raw + ']'); // eslint-disable-line dot-notation
+                nodePaths.unshift('for[' + nodeParent.aNode.directives['for'].item + ']'); // eslint-disable-line dot-notation
                 break;
 
             case NodeType.SLOT:
@@ -44,7 +44,7 @@ function getNodePath(node) {
                 break;
 
             case NodeType.CMPT:
-                nodePaths.unshift('component[' + (nodeParent.subTag || 'root') + ']');
+                nodePaths.unshift('component[' + (nodeParent.source ? nodeParent.source.tagName : 'root') + ']');
                 break;
 
             case NodeType.TEXT:

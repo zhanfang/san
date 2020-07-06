@@ -9,6 +9,7 @@
 
 var contains = require('../util/contains');
 var empty = require('../util/empty');
+var nextTick = require('../util/next-tick');
 var svgTags = require('../browser/svg-tags');
 var ie = require('../browser/ie');
 var evalExpr = require('../runtime/eval-expr');
@@ -41,37 +42,47 @@ var HTML_ATTR_PROP_MAP = {
  * @inner
  * @type {Object}
  */
-
-
 function defaultElementPropHandler(el, value, name) {
     var propName = HTML_ATTR_PROP_MAP[name] || name;
-    value = value == null ? '' : value;
+    var valueNotNull = value != null;
+
     // input 的 type 是个特殊属性，其实也应该用 setAttribute
     // 但是 type 不应该运行时动态改变，否则会有兼容性问题
     // 所以这里直接就不管了
     if (propName in el) {
-        el[propName] = value;
+        el[propName] = valueNotNull ? value : '';
     }
-    else {
+    else if (valueNotNull) {
         el.setAttribute(name, value);
     }
 
-    // attribute 绑定的是 text，所以不会出现 null 的情况，这里无需处理
-    // 换句话来说，san 是做不到 attribute 时有时无的
-    // if (value == null) {
-    //     el.removeAttribute(name);
-    // }
+    if (!valueNotNull) {
+        el.removeAttribute(name);
+    }
 }
 
 function svgPropHandler(el, value, name) {
     el.setAttribute(name, value);
 }
 
-function boolPropHandler(el, value, name, element, prop) {
+function boolPropHandler(el, value, name) {
     var propName = HTML_ATTR_PROP_MAP[name] || name;
-    el[propName] = !!(prop && prop.raw == null
-        || value && value !== 'false' && value !== '0');
+    el[propName] = !!value;
 }
+
+// #[begin] allua
+// see https://github.com/baidu/san/issues/495
+function placeholderHandler(el, value, name, element) {
+    if (ie > 9 && !el.value && value) {
+        element.__bkph = true;
+        nextTick(function () {
+            element.__bkph = false;
+        });
+    }
+
+    defaultElementPropHandler(el, value, name);
+}
+// #[end]
 
 /* eslint-disable fecs-properties-quote */
 /**
@@ -160,6 +171,11 @@ var elementPropHandlers = {
             }
             // #[end]
         },
+
+        // #[begin] allua
+        placeholder: placeholderHandler,
+        // #[end]
+
         readonly: boolPropHandler,
         disabled: boolPropHandler,
         autofocus: boolPropHandler,
@@ -177,9 +193,6 @@ var elementPropHandlers = {
     },
 
     select: {
-        value: function (el, value) {
-            el.value = value || '';
-        },
         readonly: boolPropHandler,
         disabled: boolPropHandler,
         autofocus: boolPropHandler,
@@ -187,6 +200,9 @@ var elementPropHandlers = {
     },
 
     textarea: {
+        // #[begin] allua
+        placeholder: placeholderHandler,
+        // #[end]
         readonly: boolPropHandler,
         disabled: boolPropHandler,
         autofocus: boolPropHandler,
@@ -197,7 +213,12 @@ var elementPropHandlers = {
         disabled: boolPropHandler,
         autofocus: boolPropHandler,
         type: function (el, value) {
-            el.setAttribute('type', value);
+            if (value != null) {
+                el.setAttribute('type', value);
+            }
+            else {
+                el.removeAttribute('type');
+            }
         }
     }
 };

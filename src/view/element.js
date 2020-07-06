@@ -61,7 +61,7 @@ function Element(aNode, parent, scope, owner, reverseWalker) {
     }
     // #[end]
 
-    nodeSBindInit(this, aNode.directives.bind);
+    this._sbindData = nodeSBindInit(aNode.directives.bind, this.scope, this.owner);
     this.lifeCycle = LifeCycle.inited;
 
     // #[begin] reverse
@@ -139,11 +139,10 @@ Element.prototype.attach = function (parentEl, beforeEl) {
 
             for (var i = 0, l = props.length; i < l; i++) {
                 var prop = props[i];
-                var propName = prop.name;
                 var value = evalExpr(prop.expr, this.scope, this.owner);
 
-                if (value || !baseProps[propName]) {
-                    prop.handler(this.el, value, propName, this, prop);
+                if (value || !baseProps[prop.name]) {
+                    prop.handler(this.el, value, prop.name, this);
                 }
             }
 
@@ -238,9 +237,11 @@ Element.prototype._update = function (changes) {
 
         // update s-bind
         var me = this;
-        nodeSBindUpdate(
-            this,
+        this._sbindData = nodeSBindUpdate(
             this.aNode.directives.bind,
+            this._sbindData,
+            this.scope,
+            this.owner,
             changes,
             function (name, value) {
                 if (name in me.aNode.hotspot.props) {
@@ -266,7 +267,7 @@ Element.prototype._update = function (changes) {
                         || prop.hintExpr && changeExprCompare(change.expr, prop.hintExpr, this.scope)
                     )
                 ) {
-                    prop.handler(this.el, evalExpr(prop.expr, this.scope, this.owner), propName, this, prop);
+                    prop.handler(this.el, evalExpr(prop.expr, this.scope, this.owner), propName, this);
                     break;
                 }
             }
