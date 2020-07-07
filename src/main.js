@@ -59,6 +59,7 @@
     var Data = require('./runtime/data');
     var evalExpr = require('./runtime/eval-expr');
     var DataTypes = require('./util/data-types');
+    var Element = require('./view/element');
 
 
     var san = {
@@ -67,8 +68,15 @@
          * san类型
          *
          * @type {string}
-         */        
+         */
         type: 'for-swan',
+
+        /**
+         * DOM 节点基类
+         *
+         * @type {Function}
+         */
+        Element: Element,
 
         /**
          * san版本号
