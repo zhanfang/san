@@ -62,14 +62,6 @@
 
 
     var san = {
-
-        /**
-         * san类型
-         *
-         * @type {string}
-         */        
-        type: 'for-swan',
-
         /**
          * san类型
          *
