@@ -151,7 +151,7 @@ function Component(options) { // eslint-disable-line
         this.scope = this.owner.data;
     }
 
-    this.id = guid++;
+    this.id = guid();
 
     // #[begin] reverse
     // 组件反解，读取注入的组件数据
