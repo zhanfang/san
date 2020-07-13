@@ -28,7 +28,7 @@ var Element = require('./element');
  *
  * @param {Object} aNode 要预热的ANode
  */
-function preheatANode(aNode) {
+function preheatANode(aNode, componentInstance) {
     var stack = [];
 
     function recordHotspotData(expr, notContentData) {
@@ -87,7 +87,7 @@ function preheatANode(aNode) {
                 each(aNode.props, function (prop) {
                     aNode.hotspot.binds.push({
                         name: kebab2camel(prop.name),
-                        expr: prop.noValue != null 
+                        expr: prop.noValue != null
                             ? {type: ExprType.BOOL, value: true}
                             : prop.expr,
                         x: prop.x,
@@ -197,20 +197,33 @@ function preheatANode(aNode) {
                     aNode = aNode.forRinsed;
                 }
 
-                if (hotTags[aNode.tagName]) {
-                    aNode.Clazz = Element;
-                }
-                else {
-                    switch (aNode.tagName) {
-                        case 'slot':
-                            aNode.Clazz = SlotNode;
-                            break;
+                switch (aNode.tagName) {
+                    case 'slot':
+                        aNode.Clazz = SlotNode;
+                        break;
 
-                        case 'template':
-                        case 'fragment':
-                            aNode.hotspot.hasRootNode = true;
-                            aNode.Clazz = TemplateNode;
-                    }
+                    case 'template':
+                    case 'fragment':
+                        aNode.hotspot.hasRootNode = true;
+                        aNode.Clazz = TemplateNode;
+                        break;
+
+                    default:
+                        if (hotTags[aNode.tagName]) {
+                            if (!componentInstance 
+                                || !(componentInstance.getComponentType || componentInstance.components[aNode.tagName])
+                            ) {
+                                aNode.Clazz = Element;
+                            }
+
+                            // #[begin] error
+                            if (componentInstance) {
+                                if (componentInstance.components[aNode.tagName]) {
+                                    warn('\`' + aNode.tagName + '\` as sub-component tag is a bad practice.');
+                                }
+                            }
+                            // #[end]
+                        }
                 }
                 // === analyse hotspot props: end
             }

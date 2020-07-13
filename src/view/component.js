@@ -49,7 +49,6 @@ var warn = require('../util/warn');
 
 
 
-
 /**
  * 组件类
  *
@@ -97,7 +96,6 @@ function Component(options) { // eslint-disable-line
 
         for (var key in components) { // eslint-disable-line
             var cmptClass = components[key];
-
             if (typeof cmptClass === 'object' && !(cmptClass instanceof ComponentLoader)) {
                 components[key] = defineComponent(cmptClass);
             }
@@ -120,21 +118,22 @@ function Component(options) { // eslint-disable-line
             proto.aNode = parseComponentTemplate(clazz);
         }
     }
-    preheatANode(proto.aNode);
 
+    preheatANode(proto.aNode, this);
 
     this.tagName = proto.aNode.tagName;
     this.source = typeof options.source === 'string'
         ? parseTemplate(options.source).children[0]
         : options.source;
+
     preheatANode(this.source);
+
 
 
     this.sourceSlotNameProps = [];
     this.sourceSlots = {
         named: {}
     };
-
 
     this.owner = options.owner;
     this.scope = options.scope;
@@ -243,7 +242,6 @@ function Component(options) { // eslint-disable-line
     }
 
     this.data = new Data(initData);
-
 
     this.tagName = this.tagName || 'div';
     // #[begin] allua
