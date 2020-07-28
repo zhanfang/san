@@ -60,6 +60,7 @@
     var evalExpr = require('./runtime/eval-expr');
     var DataTypes = require('./util/data-types');
     var Element = require('./view/element');
+    var Walker = require('./parser/walker');
 
 
     var san = {
@@ -76,6 +77,13 @@
          * @type {Function}
          */
         Element: Element,
+
+        /**
+         * 字符串源码读取
+         *
+         * @type {Function}
+         */
+        Walker: Walker,
 
         /**
          * san版本号
