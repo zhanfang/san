@@ -227,6 +227,35 @@ aPack = [7,,6,1,3,"name",]
 - head: 8
 - 编码序: `{Node}name, {Array<Node>}args`
 
+```js
+aPack = [8,6,1,3,"showToast",1,6,1,3,"msg"]
+/*
+{
+    "type": 6,
+    "name": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "showToast"
+            }
+        ]
+    },
+    "args": [
+        {
+            "type": 4,
+            "paths": [
+                {
+                    "type": 1,
+                    "value": "msg"
+                }
+            ]
+        }
+    ]
+}
+*/
+```
+
 ### TEXT
 
 - head: 9
@@ -263,52 +292,287 @@ aPack = [9,,2,3,"Hello ",7,,6,1,3,"name",]
 ### BINARY
 
 - head: 10
-- 编码序: `{number}operator, {Array<Node>}segs`
+- 编码序: `{number}operator, {Node}first, {Node}second`
+
+```js
+aPack = [10,43,6,1,3,"num",4,1]
+/*
+{
+    "type": 8,
+    "operator": 43,
+    "segs": [
+        {
+            "type": 4,
+            "paths": [
+                {
+                    "type": 1,
+                    "value": "num"
+                }
+            ]
+        },
+        {
+            "type": 2,
+            "value": 1
+        }
+    ]
+}
+*/
+```
 
 ### UNARY
 
 - head: 11
 - 编码序: `{number}operator, {Node}expr`
 
+```js
+aPack = [11,33,6,1,3,"exists"]
+/*
+{
+    "type": 9,
+    "expr": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "exists"
+            }
+        ]
+    },
+    "operator": 33
+}
+*/
+```
+
 ### TERTIARY
 
 - head: 12
-- 编码序: `{Array<Node>}segs`
+- 编码序: `{Node}condExpr, {Node}truthyExpr, {Node}falsyExpr`
+
+```js
+aPack = [12,6,1,3,"exists",6,1,3,"num",4,0]
+/*
+{
+    "type": 10,
+    "segs": [
+        {
+            "type": 4,
+            "paths": [
+                {
+                    "type": 1,
+                    "value": "exists"
+                }
+            ]
+        },
+        {
+            "type": 4,
+            "paths": [
+                {
+                    "type": 1,
+                    "value": "num"
+                }
+            ]
+        },
+        {
+            "type": 2,
+            "value": 0
+        }
+    ]
+}
+*/
+```
 
 ### OBJECT
 
 - head: 13
 - 编码序: `{Array<Node>}items`
 
+```js
+aPack = [13,2,14,3,"key",6,1,3,"key",15,6,1,3,"ext"]
+/*
+{
+    "type": 11,
+    "items": [
+        {
+            "name": {
+                "type": 1,
+                "value": "key"
+            },
+            "expr": {
+                "type": 4,
+                "paths": [
+                    {
+                        "type": 1,
+                        "value": "key"
+                    }
+                ]
+            }
+        },
+        {
+            "spread": true,
+            "expr": {
+                "type": 4,
+                "paths": [
+                    {
+                        "type": 1,
+                        "value": "ext"
+                    }
+                ]
+            }
+        }
+    ]
+}
+*/
+```
+
 ### OBJECT ITEM UNSPREAD
 
 - head: 14
 - 编码序: `{Node}name, {Node}expr`
+
+```js
+aPack = [14,3,"key",6,1,3,"key"]
+/*
+{
+    "name": {
+        "type": 1,
+        "value": "key"
+    },
+    "expr": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "key"
+            }
+        ]
+    }
+}   
+*/
+```
 
 ### OBJECT ITEM SPREAD
 
 - head: 15
 - 编码序: `{Node}expr`
 
+```js
+aPack = [15,6,1,3,"ext"]
+/*
+{
+    "spread": true,
+    "expr": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "ext"
+            }
+        ]
+    }
+}
+*/
+```
+
 ### ARRAY
 
 - head: 16
 - 编码序: `{Array<Node>}items`
+
+```js
+aPack = [16,3,17,4,1,17,6,1,3,"two",18,6,1,3,"ext"]
+/*
+{
+    "type": 12,
+    "items": [
+        {
+            "expr": {
+                "type": 2,
+                "value": 1
+            }
+        },
+        {
+            "expr": {
+                "type": 4,
+                "paths": [
+                    {
+                        "type": 1,
+                        "value": "two"
+                    }
+                ]
+            }
+        },
+        {
+            "spread": true,
+            "expr": {
+                "type": 4,
+                "paths": [
+                    {
+                        "type": 1,
+                        "value": "ext"
+                    }
+                ]
+            }
+        }
+    ]
+}
+*/
+```
 
 ### ARRAY ITEM UNSPREAD
 
 - head: 17
 - 编码序: `{Node}expr`
 
+
+```js
+aPack = [17,4,1]
+/*
+{
+    "expr": {
+        "type": 2,
+        "value": 1
+    }
+}
+*/
+```
+
 ### ARRAY ITEM SPREAD
 
 - head: 18
 - 编码序: `{Node}expr`
 
+
+```js
+aPack = [18,6,1,3,"ext"]
+/*
+{
+    "spread": true,
+    "expr": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "ext"
+            }
+        ]
+    }
+}
+*/
+```
+
 ### NULL
 
 - head: 19
 - 编码序: 无
+
+```js
+aPack = [19]
+/*
+{
+    "type": 13
+}
+*/
+```
 
 
 泛属性节点
@@ -319,20 +583,120 @@ aPack = [9,,2,3,"Hello ",7,,6,1,3,"name",]
 - head: 2
 - 编码序: `{string}name, {Node}expr`
 
+
+```js
+aPack = [2,"title",9,,2,3,"Hello ",7,,6,1,3,"name",]
+/*
+{
+    "name": "title",
+    "expr": {
+        "type": 7,
+        "segs": [
+            {
+                "type": 1,
+                "value": "Hello "
+            },
+            {
+                "type": 5,
+                "expr": {
+                    "type": 4,
+                    "paths": [
+                        {
+                            "type": 1,
+                            "value": "name"
+                        }
+                    ]
+                },
+                "filters": []
+            }
+        ]
+    }
+}
+*/
+```
+
 ### NOVALUE 属性
 
 - head: 33
 - 编码序: `{string}name, {Node}expr`
+
+
+```js
+aPack = [33,"disabled",5,1]
+/*
+{
+    "name": "disabled",
+    "expr": {
+        "type": 3,
+        "value": true
+    },
+    "noValue": 1
+}
+*/
+```
 
 ### 双向绑定属性
 
 - head: 34
 - 编码序: `{string}name, {Node}expr`
 
+
+```js
+aPack = [34,"value",6,1,3,"name"]
+/*
+{
+    "name": "value",
+    "expr": {
+        "type": 4,
+        "paths": [
+            {
+                "type": 1,
+                "value": "name"
+            }
+        ]
+    },
+    "x": 1
+}
+*/
+```
+
 ### 事件
 
 - head: 35
 - 编码序: `{string}name, {Node}expr, {ObjectAsArray}modifier`
+
+```js
+aPack = [35,"click",8,6,1,3,"showToast",1,6,1,3,"msg",]
+/*
+{
+    "name": "click",
+    "modifier": {},
+    "expr": {
+        "type": 6,
+        "name": {
+            "type": 4,
+            "paths": [
+                {
+                    "type": 1,
+                    "value": "showToast"
+                }
+            ]
+        },
+        "args": [
+            {
+                "type": 4,
+                "paths": [
+                    {
+                        "type": 1,
+                        "value": "msg"
+                    }
+                ]
+            }
+        ]
+    }
+}
+*/
+```
 
 ### var
 
