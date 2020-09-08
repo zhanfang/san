@@ -925,7 +925,7 @@ Component.prototype.attach = function (parentEl, beforeEl) {
                     var prop = props[i];
                     var value = evalExpr(prop.expr, this.data, this);
 
-                    if (value || !baseProps[prop.name]) {
+                    if (typeof value !== 'undefined' || !baseProps[prop.name]) {
                         prop.handler(this.el, value, prop.name, this);
                     }
                 }
