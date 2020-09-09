@@ -141,7 +141,8 @@ Element.prototype.attach = function (parentEl, beforeEl) {
                 var prop = props[i];
                 var value = evalExpr(prop.expr, this.scope, this.owner);
 
-                if (typeof value !== 'undefined' || !baseProps[prop.name]) {
+                // 与 3.7.9 保持一致，将处理条件真和部分假（false、0、NaN），其它假（null undefined ''）不予处理
+                if ((value != null && value !== '') || !baseProps[prop.name]) {
                     prop.handler(this.el, value, prop.name, this);
                 }
             }
