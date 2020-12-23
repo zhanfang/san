@@ -1,7 +1,7 @@
 {
   "name": "san-for-swan",
   "description": "A fast, portable, flexible JavaScript component framework",
-  "version": "3.9.2-fix.4",
+  "version": "3.9.2-fix.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/baidu/san.git"
@@ -21,8 +21,8 @@
     "build": "node ./tool/build.js"
   },
   "types": "types",
-  "main": "dist/san.dev.js",
-  "browser": "dist/san.dev.js",
+  "main": "dist/san.spa.js",
+  "browser": "dist/san.spa.js",
   "unpkg": "dist/san.min.js",
   "files": [
     "src",
