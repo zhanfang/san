@@ -21,8 +21,8 @@
     "build": "node ./tool/build.js"
   },
   "types": "types",
-  "main": "dist/san.spa.js",
-  "browser": "dist/san.spa.js",
+  "main": "dist/san.spa.dev.js",
+  "browser": "dist/san.spa.dev.js",
   "unpkg": "dist/san.min.js",
   "files": [
     "src",
