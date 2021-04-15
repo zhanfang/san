@@ -68,8 +68,12 @@ function Component(options) { // eslint-disable-line
 
 
     options = options || {};
-
     this.lifeCycle = LifeCycle.start;
+
+    if (typeof this.construct === 'function') {
+        this.construct(options);
+    }
+
     this.children = [];
     this._elFns = [];
     this.listeners = {};
