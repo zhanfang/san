@@ -54,13 +54,11 @@ function parseText(source, delimiters) {
     var walker = new Walker(source);
     var beforeIndex = 0;
 
-    var expr = {
-        type: ExprType.TEXT,
-        segs: []
-    };
+    var segs = [];
+    var original;
 
     function pushStringToSeg(text) {
-        text && expr.segs.push({
+        text && segs.push({
             type: ExprType.STRING,
             value: decodeHTMLEntity(text)
         });
@@ -70,33 +68,48 @@ function parseText(source, delimiters) {
     while ((exprMatch = walker.match(exprStartReg)) != null) {
         var interpSource = exprMatch[1];
         var interpLen = exprMatch[0].length;
-        if (walker.cut(walker.index + 1 - delimEndLen, walker.index + 1) === delimiters[1]) {
-            interpSource += walker.cut(walker.index, walker.index + 1);
-            walker.go(1);
+        if (walker.source.slice(walker.index + 1 - delimEndLen, walker.index + 1) === delimiters[1]) {
+            interpSource += walker.source.slice(walker.index, walker.index + 1);
+            walker.index++;
             interpLen++;
         }
 
-        pushStringToSeg(walker.cut(
+        pushStringToSeg(walker.source.slice(
             beforeIndex,
             walker.index - interpLen
         ));
 
         var interp = parseInterp(interpSource);
-        expr.original = expr.original || interp.original;
-        expr.segs.push(interp);
+        original = original || interp.original;
+        segs.push(interp);
 
         beforeIndex = walker.index;
     }
 
-    pushStringToSeg(walker.cut(beforeIndex));
+    pushStringToSeg(walker.source.slice(beforeIndex));
 
+    switch (segs.length) {
+        case 0:
+            return {
+                type: ExprType.STRING,
+                value: ''
+            };
 
-
-    if (expr.segs.length === 1 && expr.segs[0].type === ExprType.STRING) {
-        return expr.segs[0];
+        case 1:
+            if (segs[0].type === ExprType.INTERP && segs[0].filters.length === 0 && !segs[0].original) {
+                return segs[0].expr;
+            }
+            return segs[0];
     }
 
-    return expr;
+    return original ? {
+        type: ExprType.TEXT,
+        segs: segs,
+        original: 1
+    } : {
+        type: ExprType.TEXT,
+        segs: segs
+    };
 }
 
 exports = module.exports = parseText;

@@ -1,7 +1,7 @@
 {
   "name": "san-for-swan",
   "description": "A fast, portable, flexible JavaScript component framework",
-  "version": "3.9.2-fix.6",
+  "version": "3.9.2-fix.7",
   "repository": {
     "type": "git",
     "url": "https://github.com/baidu/san.git"

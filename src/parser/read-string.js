@@ -7,14 +7,17 @@
  * @file 读取字符串
  */
 
+
+var ExprType = require('./expr-type');
+
 /**
  * 读取字符串
  *
  * @param {Walker} walker 源码读取对象
  * @return {Object}
  */
- function readString(walker) {
-    var startCode = walker.currentCode();
+function readString(walker) {
+    var startCode = walker.source.charCodeAt(walker.index);
     var value = "";
     var charCode;
 
@@ -26,16 +29,16 @@
                 switch (charCode) {
                     case 117: // \u
                         value += String.fromCharCode(parseInt(
-                            walker.cut(walker.index + 1, walker.index + 5)
+                            walker.source.slice(walker.index + 1, walker.index + 5)
                         ), 16);
-                        walker.go(4);
+                        walker.index += 4;
                         break;
 
                     case 120: // \x
                         value += String.fromCharCode(parseInt(
-                            walker.cut(walker.index + 1, walker.index + 3)
+                            walker.source.slice(walker.index + 1, walker.index + 3)
                         ), 16);
-                        walker.go(2);
+                        walker.index += 2;
                         break;
 
                     case 98:
@@ -63,7 +66,7 @@
 
                 break;
             case startCode:
-                walker.go(1);
+                walker.index++;
                 break walkLoop;
             default:
                 value += String.fromCharCode(charCode);
@@ -71,7 +74,7 @@
     }
 
     return {
-        type: 1,
+        type: ExprType.STRING,
         // 处理字符转义
         value: value
     };

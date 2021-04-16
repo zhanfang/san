@@ -103,61 +103,82 @@ function integrateAttr(aNode, name, value, options) {
  */
 function integrateProp(aNode, name, rawValue, options) {
     // parse two way binding, e.g. value="{=ident=}"
-    var value = rawValue || '';
-    var xMatch = value.match(/^\{=\s*(.*?)\s*=\}$/);
-
-    if (xMatch) {
+    if (rawValue && rawValue.indexOf('{=') === 0 && rawValue.slice(-2) === '=}') {
         aNode.props.push({
             name: name,
-            expr: parseExpr(xMatch[1]),
+            expr: parseExpr(rawValue.slice(2, -2)),
             x: 1
         });
 
         return;
     }
 
-    var expr = parseText(value, options.delimiters);
+    var expr = parseText(rawValue || '', options.delimiters);
 
-    // 这里不能把只有一个插值的属性抽取
-    // 因为插值里的值可能是html片段，容易被注入
-    // 组件的数据绑定在组件init时做抽取
-    switch (name) {
-        case 'class':
-        case 'style':
-            each(expr.segs, function (seg) {
-                if (seg.type === ExprType.INTERP) {
-                    seg.filters.push({
-                        type: ExprType.CALL,
-                        name: createAccessor([
-                            {
-                                type: ExprType.STRING,
-                                value: '_' + name
-                            }
-                        ]),
-                        args: []
-                    });
-                }
-            });
-            break;
+    if (expr.value === '') {
+        if (boolAttrs[name]) {
+            expr = {
+                type: ExprType.BOOL,
+                value: true
+            };
+        }
     }
+    else {
+        switch (name) {
+            case 'class':
+            case 'style':
 
-    if (expr.type === ExprType.TEXT) {
-        switch (expr.segs.length) {
-            case 0:
-                if (boolAttrs[name]) {
-                    expr = {
-                        type: ExprType.BOOL,
-                        value: true
-                    };
-                }
-                break;
+                switch (expr.type) {
+                    case ExprType.TEXT:
+                        for (var i = 0, l = expr.segs.length; i < l; i++) {
+                            if (expr.segs[i].type === ExprType.INTERP) {
+                                expr.segs[i].filters.push({
+                                    type: ExprType.CALL,
+                                    name: createAccessor([
+                                        {
+                                            type: ExprType.STRING,
+                                            value: '_' + name
+                                        }
+                                    ]),
+                                    args: []
+                                });
+                            }
+                        }
+                        break;
 
-            case 1:
-                expr = expr.segs[0];
-                if (expr.type === ExprType.INTERP && expr.filters.length === 0) {
-                    expr = expr.expr;
+                    case ExprType.INTERP:
+                        expr.filters.push({
+                            type: ExprType.CALL,
+                            name: createAccessor([
+                                {
+                                    type: ExprType.STRING,
+                                    value: '_' + name
+                                }
+                            ]),
+                            args: []
+                        });
+                        break;
+
+                    default:
+                        if (expr.type !== ExprType.STRING) {
+                            expr = {
+                                type: ExprType.INTERP,
+                                expr: expr,
+                                filters: [{
+                                    type: ExprType.CALL,
+                                    name: createAccessor([
+                                        {
+                                            type: ExprType.STRING,
+                                            value: '_' + name
+                                        }
+                                    ]),
+                                    args: []
+                                }]
+                            }
+                        }
                 }
         }
+
     }
 
     aNode.props.push(

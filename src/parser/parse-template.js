@@ -9,6 +9,7 @@
 
 
 var Walker = require('./walker');
+var ExprType = require('./expr-type');
 var integrateAttr = require('./integrate-attr');
 var parseText = require('./parse-text');
 var svgTags = require('../browser/svg-tags');
@@ -53,8 +54,9 @@ function parseTemplate(source, options) {
         return rootNode;
     }
 
-    source = source.replace(/<!--([\s\S]*?)-->/mg, '').replace(/(^\s+|\s+$)/g, '');
+    source = source.replace(/<!--([\s\S]*?)-->/mg, '');
     var walker = new Walker(source);
+    walker.goUntil();
 
     var tagReg = /<(\/)?([a-z][a-z0-9-]*)\s*/ig;
     var attrReg = /([-:0-9a-z\[\]_]+)(\s*=\s*(([^'"<>\s]+)|"([^"]*?)"|'([^']*?)'))?\s*/ig;
@@ -77,7 +79,7 @@ function parseTemplate(source, options) {
         // 47: /
         // 处理 </xxxx >
         if (tagEnd) {
-            if (walker.currentCode() === 62) {
+            if (walker.source.charCodeAt(walker.index) === 62) {
                 // 满足关闭标签的条件时，关闭标签
                 // 向上查找到对应标签，找不到时忽略关闭
                 var closeIndex = stackIndex;
@@ -111,14 +113,14 @@ function parseTemplate(source, options) {
                     stackIndex = closeIndex - 1;
                     currentNode = stack[stackIndex];
                 }
-                walker.go(1);
+                walker.index++;
             }
             // #[begin] error
             else {
                 // 处理 </xxx 非正常闭合标签
 
                 // 如果闭合标签时，匹配后的下一个字符是 <，即下一个标签的开始，那么当前闭合标签未闭合
-                if (walker.currentCode() === 60) {
+                if (walker.source.charCodeAt(walker.index) === 60) {
                     throw new Error(''
                         + '[SAN ERROR] ' + getXPath(stack)
                         + '\'s close tag not closed'
@@ -149,20 +151,20 @@ function parseTemplate(source, options) {
             while (1) {
             /* eslint-enable no-constant-condition */
 
-                var nextCharCode = walker.currentCode();
+                var nextCharCode = walker.source.charCodeAt(walker.index);
 
                 // 标签结束时跳出 attributes 读取
                 // 标签可能直接结束或闭合结束
                 if (nextCharCode === 62) {
-                    walker.go(1);
+                    walker.index++;
                     break;
                 }
 
                 // 遇到 /> 按闭合处理
                 if (nextCharCode === 47
-                    && walker.charCode(walker.index + 1) === 62
+                    && walker.source.charCodeAt(walker.index + 1) === 62
                 ) {
-                    walker.go(2);
+                    walker.index += 2;
                     tagClose = 1;
                     break;
                 }
@@ -170,7 +172,7 @@ function parseTemplate(source, options) {
                 // template 串结束了
                 // 这时候，说明这个读取周期的所有内容，都是text
                 if (!nextCharCode) {
-                    pushTextNode(walker.cut(beforeLastIndex));
+                    pushTextNode(walker.source.slice(beforeLastIndex));
                     aElement = null;
                     break;
                 }
@@ -183,7 +185,7 @@ function parseTemplate(source, options) {
                 // #[end]
 
                 // 读取 attribute
-                var attrMatch = walker.match(attrReg);
+                var attrMatch = walker.match(attrReg, 1);
                 if (attrMatch) {
                     integrateAttr(
                         aElement,
@@ -192,11 +194,58 @@ function parseTemplate(source, options) {
                         options
                     );
                 }
-
+                else {
+                    pushTextNode(walker.source.slice(beforeLastIndex, walker.index));
+                    aElement = null;
+                    break;
+                }
             }
 
             if (aElement) {
                 pushTextNode(source.slice(beforeLastIndex, tagMatchStart));
+
+                // handle show directive, append expr to style prop
+                if (aElement.directives.show) {
+                    // find style prop
+                    var styleProp = null;
+                    var propsLen = aElement.props.length;
+                    while (propsLen--) {
+                        if (aElement.props[propsLen].name === 'style') {
+                            styleProp = aElement.props[propsLen];
+                            break;
+                        }
+                    }
+
+                    var showStyleExpr = {
+                        type: ExprType.TERTIARY,
+                        segs: [
+                            aElement.directives.show.value,
+                            {type: ExprType.STRING, value: ''},
+                            {type: ExprType.STRING, value: ';display:none;'}
+                        ]
+                    };
+
+                    if (styleProp) {
+                        if (styleProp.expr.type === ExprType.TEXT) {
+                            styleProp.expr.segs.push(showStyleExpr);
+                        }
+                        else {
+                            aElement.props[propsLen].expr = {
+                                type: ExprType.TEXT,
+                                segs: [
+                                    styleProp.expr,
+                                    showStyleExpr
+                                ]
+                            };
+                        }
+                    }
+                    else {
+                        aElement.props.push({
+                            name: 'style',
+                            expr: showStyleExpr
+                        });
+                    }
+                }
 
                 // match if directive for else/elif directive
                 var elseDirective = aElement.directives['else'] // eslint-disable-line dot-notation
@@ -256,7 +305,7 @@ function parseTemplate(source, options) {
         beforeLastIndex = walker.index;
     }
 
-    pushTextNode(walker.cut(beforeLastIndex));
+    pushTextNode(walker.source.slice(beforeLastIndex));
 
     return rootNode;
 
@@ -280,9 +329,29 @@ function parseTemplate(source, options) {
         }
 
         if (text) {
-            currentNode.children.push({
-                textExpr: parseText(text, options.delimiters)
-            });
+            var expr = parseText(text, options.delimiters);
+            var lastChild = currentNode.children[currentNode.children.length - 1];
+            var textExpr = lastChild && lastChild.textExpr;
+
+            if (textExpr) {
+                if (textExpr.segs) {
+                    textExpr.segs = textExpr.segs.concat(expr.segs || expr);
+                }
+                else if (textExpr.value != null && expr.value != null) {
+                    textExpr.value = textExpr.value + expr.value;
+                }
+                else {
+                    lastChild.textExpr = {
+                        type: ExprType.TEXT,
+                        segs: [textExpr].concat(expr.segs || expr)
+                    };
+                }
+            }
+            else {
+                currentNode.children.push({
+                    textExpr: expr
+                });
+            }
         }
     }
 }
